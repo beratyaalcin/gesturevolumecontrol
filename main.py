@@ -6,16 +6,38 @@ from ctypes import cast, POINTER
 from comtypes import CLSCTX_ALL
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
-# 1. Ses Motorunu Bağla (Windows Core Audio)
-devices = AudioUtilities.GetSpeakers()
-interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-volume = cast(interface, POINTER(IAudioEndpointVolume))
-volRange = volume.GetVolumeRange() # (-65.25, 0.0, 0.03125)
-minVol, maxVol = volRange[0], volRange[1]
+# --- 1. GLOBAL DEĞİŞKENLER ---
+minVol, maxVol = -65.25, 0.0
+audio_active = False
+volume = None
 
-# 2. MediaPipe El Takibi
+# --- 2. SES MOTORU BAŞLATMA (Triple-Check) ---
+print("Ses motoruna bağlanılıyor...")
+try:
+    devices = AudioUtilities.GetSpeakers()
+    # Yol A: Standart Aktivasyon
+    try:
+        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    except:
+        # Yol B: Eğer 'devices' bir listeyse ilk elemanı dene
+        try:
+            interface = devices[0].Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        except:
+            # Yol C: 'device' özniteliği üzerinden dene
+            interface = devices.device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            
+    volume = cast(interface, POINTER(IAudioEndpointVolume))
+    volRange = volume.GetVolumeRange()
+    minVol, maxVol = volRange[0], volRange[1]
+    audio_active = True
+    print("✅ Ses motoru BAŞARIYLA bağlandı!")
+except Exception as e:
+    print(f"❌ SES HATASI: {e}")
+    print("Program görsel modda çalışıyor...")
+
+# --- 3. MEDIAPIPE ---
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5)
+hands = mp_hands.Hands(min_detection_confidence=0.7)
 mp_draw = mp.solutions.drawing_utils
 
 cap = cv2.VideoCapture(0)
@@ -31,28 +53,28 @@ while cap.isOpened():
         for handLms in results.multi_hand_landmarks:
             lmList = []
             for id, lm in enumerate(handLms.landmark):
-                h, w, c = img.shape
+                h, w, _ = img.shape
                 cx, cy = int(lm.x * w), int(lm.y * h)
                 lmList.append([id, cx, cy])
 
-            if len(lmList) != 0:
-                # Baş parmak ucu (4) ve İşaret parmağı ucu (8)
+            if len(lmList) >= 9:
                 x1, y1 = lmList[4][1], lmList[4][2]
                 x2, y2 = lmList[8][1], lmList[8][2]
-
-                # Mesafe hesapla ve ses seviyesine (dB) eşle
                 length = math.hypot(x2 - x1, y2 - y1)
-                vol = np.interp(length, [50, 250], [minVol, maxVol])
-                volume.SetMasterVolumeLevel(vol, None)
+                
+                if audio_active and volume:
+                    try:
+                        vol = np.interp(length, [30, 200], [minVol, maxVol])
+                        volume.SetMasterVolumeLevel(vol, None)
+                    except: pass
 
-                # Görsel geri bildirim
                 cv2.line(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
-                cv2.circle(img, (x1, y1), 8, (255, 0, 0), cv2.FILLED)
-                cv2.circle(img, (x2, y2), 8, (255, 0, 0), cv2.FILLED)
+                cv2.circle(img, (x1, y1), 10, (255, 0, 0), cv2.FILLED)
+                cv2.circle(img, (x2, y2), 10, (255, 0, 0), cv2.FILLED)
 
             mp_draw.draw_landmarks(img, handLms, mp_hands.HAND_CONNECTIONS)
 
-    cv2.imshow("BAIBU - Gesture Volume Control", img)
+    cv2.imshow("BAIBU Gesture Control - Final Fix", img)
     if cv2.waitKey(1) & 0xFF == ord('q'): break
 
 cap.release()
