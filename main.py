@@ -89,9 +89,10 @@ while cap.isOpened():
     bar_color = NEON_GREEN if volPer < 85 else RED
     cv2.rectangle(img, (50, int(volBar)), (85, 400), bar_color, cv2.FILLED)
     cv2.putText(img, f'{int(volPer)} %', (40, 450), cv2.FONT_HERSHEY_COMPLEX, 1, WHITE, 2)
-    cv2.putText(img, 'LINEAR VOLUME CTRL', (50, 50), cv2.FONT_HERSHEY_PLAIN, 2, CYAN, 2)
+    cv2.putText(img, 'SES KONTROL', (50, 50), cv2.FONT_HERSHEY_PLAIN, 2, CYAN, 2)
+    cv2.putText(img, '0.2v', (50, 80), cv2.FONT_HERSHEY_PLAIN, 2, CYAN, 2)
 
-    cv2.imshow("Volume Gesture Control", img)
+    cv2.imshow("Elle Ses Kontrol", img)
     if cv2.waitKey(1) & 0xFF == ord('q'): break
 
 cap.release()
