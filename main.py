@@ -2,45 +2,32 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import math
-from ctypes import cast, POINTER
-from comtypes import CLSCTX_ALL
-from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+from pycaw.pycaw import AudioUtilities
 
-# --- 1. GLOBAL DEĞİŞKENLER ---
-minVol, maxVol = -65.25, 0.0
-audio_active = False
-volume = None
+# --- KALİBRASYON AYARLARI ---
+# Parmakların birbirine en yakın (Mute) ve en uzak (Max Ses) olduğu piksel mesafeleri.
+# Eğer ses hala hızlı değişiyorsa MAX_DIST değerini 350 veya 400 yapabilirsin.
+MIN_DIST = 50  
+MAX_DIST = 300 
 
-# --- 2. SES MOTORU BAŞLATMA (Triple-Check) ---
-print("Ses motoruna bağlanılıyor...")
-try:
-    devices = AudioUtilities.GetSpeakers()
-    # Yol A: Standart Aktivasyon
-    try:
-        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-    except:
-        # Yol B: Eğer 'devices' bir listeyse ilk elemanı dene
-        try:
-            interface = devices[0].Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        except:
-            # Yol C: 'device' özniteliği üzerinden dene
-            interface = devices.device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            
-    volume = cast(interface, POINTER(IAudioEndpointVolume))
-    volRange = volume.GetVolumeRange()
-    minVol, maxVol = volRange[0], volRange[1]
-    audio_active = True
-    print("✅ Ses motoru BAŞARIYLA bağlandı!")
-except Exception as e:
-    print(f"❌ SES HATASI: {e}")
-    print("Program görsel modda çalışıyor...")
+# --- RENK PALETİ ---
+CYAN = (255, 255, 0)
+NEON_GREEN = (50, 255, 50)
+RED = (50, 50, 255)
+WHITE = (255, 255, 255)
+GRAY = (50, 50, 50)
 
-# --- 3. MEDIAPIPE ---
+# --- BAŞLANGIÇ ---
+devices = AudioUtilities.GetSpeakers()
+volume = devices.EndpointVolume
+
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(min_detection_confidence=0.7)
+hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
 mp_draw = mp.solutions.drawing_utils
 
 cap = cv2.VideoCapture(0)
+cap.set(3, 1280)
+cap.set(4, 720)
 
 while cap.isOpened():
     success, img = cap.read()
@@ -48,6 +35,9 @@ while cap.isOpened():
     img = cv2.flip(img, 1)
     imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     results = hands.process(imgRGB)
+
+    volPer = 0
+    volBar = 400
 
     if results.multi_hand_landmarks:
         for handLms in results.multi_hand_landmarks:
@@ -60,21 +50,48 @@ while cap.isOpened():
             if len(lmList) >= 9:
                 x1, y1 = lmList[4][1], lmList[4][2]
                 x2, y2 = lmList[8][1], lmList[8][2]
+                cx_mid, cy_mid = (x1 + x2) // 2, (y1 + y2) // 2
+
                 length = math.hypot(x2 - x1, y2 - y1)
                 
-                if audio_active and volume:
-                    try:
-                        vol = np.interp(length, [30, 200], [minVol, maxVol])
-                        volume.SetMasterVolumeLevel(vol, None)
-                    except: pass
+                # --- DOĞRUSAL (LINEAR) MAPPING ---
+                # 1. Ses seviyesi (0.0 - 1.0 arası scalar değer)
+                volScalar = np.interp(length, [MIN_DIST, MAX_DIST], [0.0, 1.0])
+                # 2. Görsel Bar (400'den 150'ye yükselen bar)
+                volBar = np.interp(length, [MIN_DIST, MAX_DIST], [400, 150])
+                # 3. Yüzde değeri (0 - 100)
+                volPer = np.interp(length, [MIN_DIST, MAX_DIST], [0, 100])
 
-                cv2.line(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
-                cv2.circle(img, (x1, y1), 10, (255, 0, 0), cv2.FILLED)
-                cv2.circle(img, (x2, y2), 10, (255, 0, 0), cv2.FILLED)
+                try:
+                    # Scalar metodu sesi barla %100 uyumlu hale getirir
+                    volume.SetMasterVolumeLevelScalar(volScalar, None)
+                except: pass
 
-            mp_draw.draw_landmarks(img, handLms, mp_hands.HAND_CONNECTIONS)
+                # --- GÖRSELLEŞTİRME ---
+                line_color = NEON_GREEN if volPer < 85 else RED
+                cv2.line(img, (x1, y1), (x2, y2), line_color, 3)
+                cv2.circle(img, (x1, y1), 12, CYAN, cv2.FILLED)
+                cv2.circle(img, (x2, y2), 12, CYAN, cv2.FILLED)
 
-    cv2.imshow("BAIBU Gesture Control - Final Fix", img)
+                # Parlama efekti
+                glow_radius = int(np.interp(length, [MIN_DIST, MAX_DIST], [25, 5]))
+                overlay = img.copy()
+                cv2.circle(overlay, (cx_mid, cy_mid), glow_radius + 10, line_color, cv2.FILLED)
+                img = cv2.addWeighted(overlay, 0.4, img, 0.6, 0)
+                cv2.circle(img, (cx_mid, cy_mid), glow_radius, WHITE, cv2.FILLED)
+
+            mp_draw.draw_landmarks(img, handLms, mp_hands.HAND_CONNECTIONS,
+                                   mp_draw.DrawingSpec(color=GRAY, thickness=1),
+                                   mp_draw.DrawingSpec(color=WHITE, thickness=1))
+
+    # --- UI ÇİZİMİ ---
+    cv2.rectangle(img, (50, 150), (85, 400), GRAY, 3)
+    bar_color = NEON_GREEN if volPer < 85 else RED
+    cv2.rectangle(img, (50, int(volBar)), (85, 400), bar_color, cv2.FILLED)
+    cv2.putText(img, f'{int(volPer)} %', (40, 450), cv2.FONT_HERSHEY_COMPLEX, 1, WHITE, 2)
+    cv2.putText(img, 'LINEAR VOLUME CTRL', (50, 50), cv2.FONT_HERSHEY_PLAIN, 2, CYAN, 2)
+
+    cv2.imshow("Volume Gesture Control", img)
     if cv2.waitKey(1) & 0xFF == ord('q'): break
 
 cap.release()
