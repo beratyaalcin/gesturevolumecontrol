@@ -22,4 +22,4 @@ Sesi Artırma: Baş parmak ve işaret parmağınızı birbirinden uzaklaştırı
 
 Sesi Azaltma: İki parmağınızı birbirine yaklaştırın.
 
-Çıkış: Pencere odaklıyken klavyeden 'q' tuşuna basın.
+Çıkmak için 'q' tuşuna basın.
