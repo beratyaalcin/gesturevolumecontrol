@@ -8,7 +8,7 @@ MediaPipe: Yüksek hassasiyetli el landmark tespiti.
 Pycaw: Windows Core Audio API erişimi.
 NumPy: Matematiksel haritalama (interpolation) işlemleri.
 
-Kurulum
+### Kurulum
 Proje dizininde aşağıdaki komutu çalıştırarak gerekli bağımlılıkları yükleyebilirsiniz:
 
 pip install opencv-python mediapipe pycaw comtypes numpy
@@ -17,7 +17,7 @@ Programı başlatmak için:
 
 python main.py
 
-Kontroller
+### Kontroller
 Sesi Artırma: Baş parmak ve işaret parmağınızı birbirinden uzaklaştırın.
 
 Sesi Azaltma: İki parmağınızı birbirine yaklaştırın.
