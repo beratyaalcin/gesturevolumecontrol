@@ -1,4 +1,4 @@
-🖐️ Gesture Volume Control Pro
+## 🖐️ Gesture Volume Control Pro
 Windows sistem sesini el hareketleriyle kontrol etmeyi sağlayan, yapay zeka tabanlı bir bilgisayarlı görü projesidir. MediaPipe ve OpenCV kullanılarak geliştirilen bu sistem, parmak uçlarınız arasındaki mesafeyi matematiksel olarak analiz eder ve Pycaw kütüphanesi üzerinden sistem sesini gerçek zamanlı olarak günceller.
 
 Kullanılan Teknolojiler
